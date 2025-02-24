@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+use dns_lookup::lookup_addr;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::transport::TransportProtocol::Ipv4;
 use pnet::transport::{icmp_packet_iter, transport_channel, TransportChannelType::Layer4};
@@ -72,7 +73,8 @@ fn send_packets(destination_ip: IpAddr, packet_size: u32, timeout: u32) -> io::R
 
     match iter.next_with_timeout(Duration::from_secs(timeout as u64)) {
         Ok(Some((_packet, addr))) => {
-            println!("{ttl} {addr}",);
+            let hostname = lookup_addr(&addr).unwrap_or_else(|_| addr.to_string());
+            println!("{ttl} {hostname} ({addr})");
             if destination_ip == addr {
                 return Ok(());
             }
