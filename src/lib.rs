@@ -2,7 +2,7 @@ use clap::Parser;
 use std::{
     io,
     net::{IpAddr, ToSocketAddrs},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use dns_lookup::lookup_addr;
@@ -82,17 +82,21 @@ fn send_packets(destination_ip: IpAddr, options: &TracerouteOptions) -> io::Resu
         socket.set_ttl(ttl)?;
 
         socket.send_to(&payload, &destination)?;
+        let start = Instant::now();
 
         match iter.next_with_timeout(Duration::from_secs(options.timeout as u64)) {
             Ok(Some((_packet, addr))) => {
                 let hostname = lookup_addr(&addr).unwrap_or_else(|_| addr.to_string());
-                println!("{ttl} {hostname} ({addr})");
+                println!(
+                    "{ttl:>2}  {hostname} ({addr})  {:.3} ms",
+                    start.elapsed().as_secs_f64() * 1000.0
+                );
                 if destination_ip == addr {
                     return Ok(());
                 }
             }
             Ok(None) => {
-                println!("{ttl} *");
+                println!("{ttl:>2}  *");
             }
             Err(e) => {
                 eprintln!("Error receiving ICMP packet: {}", e);
