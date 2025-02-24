@@ -1,6 +1,6 @@
 use clap::Parser;
+use ctraceroute::{execute_command, Args};
 use std::process;
-use traceroute::{execute_command, Args};
 
 fn main() {
     let mut args = Args::parse();

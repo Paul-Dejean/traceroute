@@ -13,7 +13,7 @@ use std::net::UdpSocket;
 
 #[derive(Parser, Debug)]
 #[command(name = "ctraceroute")]
-#[command(author = "Ebooth <pauldejeandev@gmail.com>")]
+#[command(author = "Paul Dejean <pauldejeandev@gmail.com>")]
 #[command(version = "1.0")]
 #[command(about = "A copy of unix command line tool traceroute", long_about = None)]
 pub struct Args {
