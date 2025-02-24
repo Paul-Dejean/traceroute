@@ -38,7 +38,13 @@ pub fn execute_command(args: &mut Args) -> i32 {
         args.hostname, ip, args.max_hops, args.packets_size,
     );
 
-    let error_code = match send_packets(ip, args.max_hops, args.timeout) {
+    let options = TracerouteOptions {
+        max_hops: args.max_hops,
+        timeout: args.timeout,
+        packet_size: args.packets_size,
+    };
+
+    let error_code = match send_packets(ip, &options) {
         Ok(_) => 0,
         Err(_) => 1,
     };
@@ -53,13 +59,18 @@ fn create_packet_payload(size: u32) -> Vec<u8> {
     payload
 }
 
-fn send_packets(destination_ip: IpAddr, packet_size: u32, timeout: u32) -> io::Result<()> {
+struct TracerouteOptions {
+    max_hops: u32,
+    timeout: u32,
+    packet_size: u32,
+}
+fn send_packets(destination_ip: IpAddr, options: &TracerouteOptions) -> io::Result<()> {
     const PORT: u16 = 33434;
     let destination = format!("{destination_ip}:{PORT}");
 
-    let socket = UdpSocket::bind("0.0.0.0:33434")?;
+    let socket = UdpSocket::bind(format!("0.0.0.0:{PORT}"))?;
     socket.set_write_timeout(Some(Duration::from_secs(3)))?;
-    let payload = create_packet_payload(packet_size);
+    let payload = create_packet_payload(options.packet_size);
 
     let protocol = Layer4(Ipv4(IpNextHeaderProtocols::Icmp));
     let (_tx, mut rx) = transport_channel(4096, protocol)
@@ -67,23 +78,25 @@ fn send_packets(destination_ip: IpAddr, packet_size: u32, timeout: u32) -> io::R
 
     let mut iter = icmp_packet_iter(&mut rx);
 
-    let ttl = 1;
-    socket.set_ttl(ttl)?;
-    socket.send_to(&payload, &destination)?;
+    for ttl in 1..=options.max_hops {
+        socket.set_ttl(ttl)?;
 
-    match iter.next_with_timeout(Duration::from_secs(timeout as u64)) {
-        Ok(Some((_packet, addr))) => {
-            let hostname = lookup_addr(&addr).unwrap_or_else(|_| addr.to_string());
-            println!("{ttl} {hostname} ({addr})");
-            if destination_ip == addr {
-                return Ok(());
+        socket.send_to(&payload, &destination)?;
+
+        match iter.next_with_timeout(Duration::from_secs(options.timeout as u64)) {
+            Ok(Some((_packet, addr))) => {
+                let hostname = lookup_addr(&addr).unwrap_or_else(|_| addr.to_string());
+                println!("{ttl} {hostname} ({addr})");
+                if destination_ip == addr {
+                    return Ok(());
+                }
             }
-        }
-        Ok(None) => {
-            println!("{ttl} *");
-        }
-        Err(e) => {
-            eprintln!("Error receiving ICMP packet: {}", e);
+            Ok(None) => {
+                println!("{ttl} *");
+            }
+            Err(e) => {
+                eprintln!("Error receiving ICMP packet: {}", e);
+            }
         }
     }
 
